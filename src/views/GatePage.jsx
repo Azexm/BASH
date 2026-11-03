@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useNav } from "@/lib/useNav";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle, AlertTriangle, ScanLine, Loader2 } from "lucide-react";
@@ -8,6 +9,8 @@ import AppShell from "@/components/AppShell";
 import { Badge, Btn, Card, inputCls, fmtDateTime } from "@/components/PanelUI";
 import { api, formatErr } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+
+const CameraScanner = dynamic(() => import("@/components/CameraScanner"), { ssr: false });
 
 const RESULT_UI = {
     admitted: { box: "border-emerald-400/50 bg-emerald-500/15", color: "text-emerald-300", icon: CheckCircle2, label: "ADMITTED" },
@@ -24,6 +27,7 @@ export default function GatePage() {
     const [code, setCode] = useState("");
     const [result, setResult] = useState(null);
     const [busy, setBusy] = useState(false);
+    const [camera, setCamera] = useState(false);
     const [log, setLog] = useState([]);
     const inputRef = useRef(null);
 
@@ -47,9 +51,8 @@ export default function GatePage() {
         inputRef.current?.focus();
     }, [result]);
 
-    const submit = async (e) => {
-        e?.preventDefault();
-        const clean = code.trim();
+    const scan = async (raw) => {
+        const clean = String(raw ?? "").trim();
         if (!clean || busy) return;
         setBusy(true);
         try {
@@ -62,6 +65,17 @@ export default function GatePage() {
         } finally {
             setBusy(false);
         }
+    };
+
+    const submit = (e) => {
+        e?.preventDefault();
+        scan(code);
+    };
+
+    // If the QR holds a link or extra text, pull out just the ticket code.
+    const onCameraScan = (text) => {
+        const m = String(text).match(/BASH-[A-F0-9]{8}/i);
+        scan(m ? m[0] : text);
     };
 
     if (loading || !user) {
@@ -89,8 +103,15 @@ export default function GatePage() {
                         <ScanLine className="w-7 h-7" /> Gate scanner
                     </h1>
                     <p className="font-body text-white/50 text-sm mt-1">
-                        Scan the ticket QR or type the code (BASH-XXXXXXXX) and press Enter.
+                        Scan the ticket QR with the camera, or type the code (BASH-XXXXXXXX) and press Enter.
                     </p>
+                </div>
+
+                <div className="space-y-3">
+                    <Btn type="button" onClick={() => setCamera((c) => !c)}>
+                        {camera ? "Close camera" : "Scan with camera"}
+                    </Btn>
+                    {camera && <CameraScanner active={camera && !result} onScan={onCameraScan} />}
                 </div>
 
                 <form onSubmit={submit} className="flex gap-3">
